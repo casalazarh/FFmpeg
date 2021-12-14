@@ -1466,6 +1466,7 @@ static void mpegts_write_pes(AVFormatContext *s, AVStream *st,
                              const uint8_t *payload, int payload_size,
                              int64_t pts, int64_t dts, int key, int stream_id)
 {
+
     MpegTSWriteStream *ts_st = st->priv_data;
     MpegTSWrite *ts = s->priv_data;
     uint8_t buf[TS_PACKET_SIZE];
@@ -1604,20 +1605,20 @@ static void mpegts_write_pes(AVFormatContext *s, AVStream *st,
                 stream_id != STREAM_ID_DSMCC_STREAM &&
                 stream_id != STREAM_ID_TYPE_E_STREAM) {
 
-                flags      = 0;
+                flags = 0;
                 if (pts != AV_NOPTS_VALUE) {
                     header_len += 5;
-                    flags      |= 0x80;
+                    flags |= 0x80;
                 }
                 if (dts != AV_NOPTS_VALUE && pts != AV_NOPTS_VALUE && dts != pts) {
                     header_len += 5;
-                    flags      |= 0x40;
+                    flags |= 0x40;
                 }
                 if (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO &&
                     st->codecpar->codec_id == AV_CODEC_ID_DIRAC) {
                     /* set PES_extension_flag */
                     pes_extension = 1;
-                    flags        |= 0x01;
+                    flags |= 0x01;
 
                     /* One byte for PES2 extension flag +
                      * one byte for extension length +
@@ -1645,6 +1646,11 @@ static void mpegts_write_pes(AVFormatContext *s, AVStream *st,
                     len += 3;
                     payload_size++;
                 }
+                if (st->codecpar->codec_id == AV_CODEC_ID_TIMED_ID3) {
+                    len += 5;
+
+                }
+
                 if (len > 0xffff)
                     len = 0;
                 if (ts->omit_video_pes_length && st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
@@ -1652,13 +1658,21 @@ static void mpegts_write_pes(AVFormatContext *s, AVStream *st,
                 }
                 *q++ = len >> 8;
                 *q++ = len;
-                val  = 0x80;
+                val = 0x80;
                 /* data alignment indicator is required for subtitle and data streams */
                 if (st->codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE || st->codecpar->codec_type == AVMEDIA_TYPE_DATA)
                     val |= 0x04;
+
                 *q++ = val;
                 *q++ = flags;
                 *q++ = header_len;
+
+                if (st->codecpar->codec_id == AV_CODEC_ID_TIMED_ID3) {
+
+                    fprintf(stderr, "VAL,FLAGS,header_leng: '%x,%x,%x,%x' \n", val |= 0x04, flags, header_len, len);
+
+                }
+
                 if (pts != AV_NOPTS_VALUE) {
                     write_pts(q, flags >> 6, pts);
                     q += 5;
@@ -1686,6 +1700,8 @@ static void mpegts_write_pes(AVFormatContext *s, AVStream *st,
                 }
 
 
+
+
                 if (is_dvb_subtitle) {
                     /* First two fields of DVB subtitles PES data:
                      * data_identifier: for DVB subtitle streams shall be coded with the value 0x20
@@ -1697,6 +1713,14 @@ static void mpegts_write_pes(AVFormatContext *s, AVStream *st,
                     memset(q, 0xff, pes_header_stuffing_bytes);
                     q += pes_header_stuffing_bytes;
                 }
+                if (st->codecpar->codec_id == AV_CODEC_ID_TIMED_ID3) {
+                    *q++ = 0x49;
+                    *q++ = 0x44;
+                    *q++ = 0x33;
+                    *q++ = 0x04;
+                    *q++ = 0x00;
+                }
+
             } else {
                 len = payload_size;
                 *q++ = len >> 8;
